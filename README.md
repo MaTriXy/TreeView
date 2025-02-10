@@ -1,143 +1,151 @@
-TreeView
+GraphView
 ===========
 
-Android TreeView is used to display data in tree structures.
+Android GraphView is used to display data in graph structures.
 
-![alt Example](TreeView.png "Example")
+![alt Logo](image/GraphView_logo.jpg "Graph Logo")
 
 Overview
 ========
-The library is designed to support different algorithms. Currently, only the algorithm from Walker (with the runtime improvements from Buchheim) has been implemented. Feel free to contribute. The algorithm should only implement the `Algorithm` Interface.
+The library can be used within `RecyclerView` and currently works with small graphs only.
+
+**This project is currently experimental and the API subject to breaking changes without notice.**
 
 Download
 ========
-
-```groovy
-dependencies {
-    implementation 'de.blox.treeview:treeview:0.1.0'
+The library is only available on MavenCentral. Please add this code to your build.gradle file on project level:
+```gradle
+allprojects {
+  repositories {
+    ...
+    mavenCentral()
+  }
 }
 ```
+
+And add the dependency to the build.gradle file within the app module:
+```gradle
+dependencies {
+    implementation 'dev.bandb.graphview:graphview:0.8.1'
+}
+```
+Layouts
+======
+### Tree
+Uses Walker's algorithm with Buchheim's runtime improvements (`BuchheimWalkerLayoutManager` class). Currently only the `TreeEdgeDecoration` can be used to draw the edges. Supports different orientations. All you have to do is using the `BuchheimWalkerConfiguration.Builder.setOrientation(int)` with either `ORIENTATION_LEFT_RIGHT`, `ORIENTATION_RIGHT_LEFT`, `ORIENTATION_TOP_BOTTOM` and
+`ORIENTATION_BOTTOM_TOP` (default). Furthermore parameters like sibling-, level-, subtree separation can be set.
+### Directed graph
+Directed graph drawing by simulating attraction/repulsion forces. For this the algorithm by Fruchterman and Reingold (`FruchtermanReingoldLayoutManager` class) was implemented. To draw the edges you can use `ArrowEdgeDecoration` or `StraightEdgeDecoration`.
+### Layered graph
+Algorithm from Sugiyama et al. for drawing multilayer graphs, taking advantage of the hierarchical structure of the graph (`SugiyamaLayoutManager` class). Currently only the `SugiyamaArrowEdgeDecoration` can be used to draw the edges. You can also set the parameters for node and level separation using the `SugiyamaConfiguration.Builder`.
 
 Usage
 ======
+GraphView must be integrated with `RecyclerView`.
+For this you’ll need to add a `RecyclerView` to your layout and create an item layout like usually when working with `RecyclerView`.
 
 ```xml
-<LinearLayout
+<com.otaliastudios.zoom.ZoomLayout
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
-    <de.blox.treeview.TreeView
-     android:id="@+id/treeview"
-     android:layout_width="match_parent"
-     android:layout_height="match_parent">
-    </de.blox.treeview.TreeView>
-</LinearLayout>
-```
-You can make the node Layout how you like. Just define a layout file, e.g. ```node.xml``` ...
-```xml
-<android.support.v7.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
-                                    xmlns:card_view="http://schemas.android.com/apk/res-auto"
-                                    android:id="@+id/card_view"
-                                    android:layout_width="match_parent"
-                                    android:layout_height="wrap_content"
-                                    android:layout_gravity="center"
-                                    android:layout_margin="5dp"
-                                    card_view:cardBackgroundColor="@android:color/holo_blue_dark"
-                                    card_view:cardElevation="16dp"
-                                    card_view:contentPadding="10dp">
+    android:layout_height="match_parent"
+    app:hasClickableChildren="true">
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:orientation="vertical">
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recycler"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content" />
 
-        <TextView
-            android:id="@+id/textView"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textColor="@android:color/white"
-            android:textStyle="bold"/>
-
-    </LinearLayout>
-</android.support.v7.widget.CardView>
+</com.otaliastudios.zoom.ZoomLayout>
 ```
 
-... and use it with the adapter
+Currently GraphView must be used together with a Zoom Engine like [ZoomLayout](https://github.com/natario1/ZoomLayout). To change the zoom values just use the different attributes described in the ZoomLayout project site.
 
-```java
-public class MainActivity extends AppCompatActivity {
-    private int nodeCount = 0;
+To create a graph, we need to instantiate the `Graph` class. Next submit your graph to your Adapter, for that you must extend from the `AbstractGraphAdapter` class.
 
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
-        TreeView treeView = findViewById(R.id.tree);
+```kotlin
+private void setupGraphView {
+    val recycler = findViewById(R.id.recycler)
 
-        BaseTreeAdapter adapter = new BaseTreeAdapter<ViewHolder>(this, R.layout.node) {
-            @NonNull
-            @Override
-            public ViewHolder onCreateViewHolder(View view) {
-                return new ViewHolder(view);
-            }
+    // 1. Set a layout manager of the ones described above that the RecyclerView will use.
+    val configuration = BuchheimWalkerConfiguration.Builder()
+                    .setSiblingSeparation(100)
+                    .setLevelSeparation(100)
+                    .setSubtreeSeparation(100)
+                    .setOrientation(BuchheimWalkerConfiguration.ORIENTATION_TOP_BOTTOM)
+                    .build()
+    recycler.layoutManager = BuchheimWalkerLayoutManager(context, configuration)
 
-            @Override
-            public void onBindViewHolder(ViewHolder viewHolder, Object data, int position) {
-                viewHolder.mTextView.setText(data.toString());
-            }
-        };
-        treeView.setAdapter(adapter);
-        
-        // example tree
-        TreeNode rootNode = new TreeNode(getNodeText());
-        rootNode.addChild(new TreeNode(getNodeText()));
-        final TreeNode child3 = new TreeNode(getNodeText());
-        child3.addChild(new TreeNode(getNodeText()));
-        final TreeNode child6 = new TreeNode(getNodeText());
-        child6.addChild(new TreeNode(getNodeText()));
-        child6.addChild(new TreeNode(getNodeText()));
-        child3.addChild(child6);
-        rootNode.addChild(child3);
-        final TreeNode child4 = new TreeNode(getNodeText());
-        child4.addChild(new TreeNode(getNodeText()));
-        child4.addChild(new TreeNode(getNodeText()));
-        rootNode.addChild(child4);
+    // 2. Attach item decorations to draw edges
+    recycler.addItemDecoration(TreeEdgeDecoration())
 
-        adapter.setRootNode(rootNode);
-    }
-    
-    private String getNodeText() {
-        return "Node " + nodeCount++;
+    // 3. Build your graph
+    val graph = Graph()
+    val node1 = Node("Parent")
+    val node2 = Node("Child 1")
+    val node3 = Node("Child 2")
+
+    graph.addEdge(node1, node2)
+    graph.addEdge(node1, node3)
+
+    // 4. You will need a simple Adapter/ViewHolder.
+    // 4.1 Your Adapter class should extend from `AbstractGraphAdapter`
+    adapter = object : AbstractGraphAdapter<NodeViewHolder>() {
+
+        // 4.2 ViewHolder should extend from `RecyclerView.ViewHolder`
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): NodeViewHolder {
+            val view = LayoutInflater.from(parent.context)
+                    .inflate(R.layout.node, parent, false)
+            return NodeViewHolder(view)
+        }
+
+        override fun onBindViewHolder(holder: NodeViewHolder, position: Int) {
+            holder.textView.text = getNodeData(position).toString()
+        }
+    }.apply {
+        // 4.3 Submit the graph
+        this.submitGraph(graph)
+        recycler.adapter = this
     }
 }
 ```
 
-ViewHolder class:
-```java
-    private class ViewHolder {
-        TextView mTextView;
-        ViewHolder(View view) {
-            mTextView = view.findViewById(R.id.textView);
-        }
+Customization
+======
+You can change the edge design by supplying your custom paint object to your edge decorator.
+```kotlin
+    val edgeStyle = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        strokeWidth = 5f
+        color = Color.BLACK
+        style = Paint.Style.STROKE
+        strokeJoin = Paint.Join.ROUND
+        pathEffect = CornerPathEffect(10f) 
+    }
+    
+    recyclerView.addItemDecoration(TreeEdgeDecoration(edgeStyle))
+```
+
+If you want that your nodes are all the same size you can set `useMaxSize` to `true`. The biggest node defines the size for all the other nodes.
+```kotlin
+    recyclerView.layoutManager = BuchheimWalkerLayoutManager(this, configuration).apply { 
+        useMaxSize = true
     }
 ```
 
-Customization
-=============
+Examples
+========
+#### Rooted Tree
+![alt Example](image/Tree.png "Tree Example")
 
-To use the custom attributes you have to add the namespace first: ```
-    xmlns:app="http://schemas.android.com/apk/res-auto"```
+#### Directed Graph
+![alt Example](image/Graph.png "Graph Example")
 
-| Attribute        | Format    | Example                        | Explanation|
-|------------------|-----------|--------------------------------|------------|
-| levelSeparation | Dimension | 50dp                           | How much space should be used between levels
-| lineThickness   | Dimension | 10dp                           | Set how thick the connection lines should be
-| lineColor       | Color     | "@android:color/holo_red_dark" | Set the color of the connection lines
-| useMaxSize      | Boolean   | true                           | Use the same size for each node
+#### Layered Graph
+![alt Example](image/LayeredGraph.png "Layered Graph Example")
 
 License
 =======
 
-    Copyright 2018 Team-Blox
+    Copyright 2019 - 2021 Block & Block
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
